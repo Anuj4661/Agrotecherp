@@ -1981,6 +1981,7 @@
             <tr><td>Entities & Branches</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
             <tr><td>User Management</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
             <tr><td>Company Settings</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
+            <tr><td>Post invoices / Approve challans &amp; quotations</td><td>✅</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td><td>❌</td></tr>
           </tbody>
         </table>
         <p style="font-size:0.72rem;color:var(--gray-400);padding:8px 14px;">✅ Full access &nbsp; 👁️ View only &nbsp; ❌ No access</p>
@@ -6671,6 +6672,7 @@ function isDocLocked(type,r){
   if(type==='quotation') return docState(r)==='Approved'||r.status==='Converted';
   return docState(r)==='Approved';
 }
+function canFinalize(){ return !!(typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.role==='admin'); }
 function canWriteNow(){
   if(typeof CURRENT_USER==='undefined'||!CURRENT_USER) return true;
   return (ROLES[CURRENT_USER.role]||{}).canWrite!==false;
@@ -6894,7 +6896,7 @@ window.saveSale=function(){
 
 function postInvoice(invNo){
   const s=DB.sales.find(x=>x.inv===invNo); if(!s||isInvLocked(s)) return;
-  if(!canWriteNow()){ toast('🔒 Your role cannot post documents'); return; }
+  if(!canFinalize()){ toast('🔒 Only the Super Admin can post invoices'); return; }
   if(!confirm(`Post invoice ${invNo}?\n\nOnce posted the invoice is final and can no longer be edited or deleted.`)) return;
   s.docStatus='Posted'; s.postedBy=whoAmI(); s.postedAt=new Date().toISOString();
   saveData(); renderSales();
@@ -6995,7 +6997,7 @@ window.renderSales=function(){
       <td style="display:flex;gap:4px;flex-wrap:wrap;">
         <button class="btn btn-sm btn-outline" onclick="printInvoiceByNo('${no}')" title="Print">🖨️</button>
         ${locked?'':`<button class="btn btn-sm btn-outline" onclick="openEditInvoice('${no}')" title="Edit">✏️</button>
-        <button class="btn btn-sm btn-outline" style="color:var(--green-mid);" onclick="postInvoice('${no}')" title="Post — makes the invoice final">✔ Post</button>`}
+        ${canFinalize()?`<button class="btn btn-sm btn-outline" style="color:var(--green-mid);" onclick="postInvoice('${no}')" title="Post — makes the invoice final">✔ Post</button>`:''}`}
         ${bal>0?`<button class="btn btn-sm btn-outline" onclick="openReceivePayment('${no}')" title="Receive payment">💵</button>`:''}
         ${locked?'':`<button class="btn btn-sm btn-outline" style="color:var(--danger);" onclick="deleteInvoiceDraft('${no}')" title="Delete draft">✕</button>`}
       </td></tr>`;
@@ -7019,7 +7021,7 @@ function showDocEditBanner(rec,type){
     b=document.createElement('div'); b.id='docEditBanner'; b.className='alert alert-warning'; b.style.cssText='margin-bottom:16px;align-items:center;flex-wrap:wrap;gap:10px;';
     document.querySelector('#page-doc-designer .page-header').insertAdjacentElement('afterend',b);
   }
-  b.innerHTML=`<span style="flex:1;">✏️ <strong>Editing ${docEsc(rec.num)}</strong> (Draft) — the document number is fixed. Approve it from the register when it is final.</span>
+  b.innerHTML=`<span style="flex:1;">✏️ <strong>Editing ${docEsc(rec.num)}</strong> (Draft) — the document number is fixed. The Super Admin approves it from the register when it is final.</span>
     <button class="btn btn-primary btn-sm" onclick="saveDocEdit(true)">💾 Save Changes</button>
     <button class="btn btn-outline btn-sm" onclick="cancelDocEdit()">Cancel</button>`;
 }
@@ -7094,7 +7096,7 @@ function saveDocEdit(leave){
 }
 function approveDoc(type,id){
   const rec=(type==='challan'?CHALLANS:QUOTATIONS).find(x=>x.id===id); if(!rec||isDocLocked(type,rec)) return;
-  if(!canWriteNow()){ toast('🔒 Your role cannot approve documents'); return; }
+  if(!canFinalize()){ toast('🔒 Only the Super Admin can approve documents'); return; }
   if(!confirm(`Approve ${rec.num}?\n\nOnce approved it is final and can no longer be edited or deleted.`)) return;
   rec.docStatus='Approved'; rec.approvedBy=whoAmI(); rec.approvedAt=new Date().toISOString();
   if(type==='challan'){ saveChallans(); renderChallans(); } else { saveQuotations(); renderQuotations(); }
@@ -7161,7 +7163,7 @@ window.renderChallans=function(){
       <td style="display:flex;gap:4px;flex-wrap:wrap;">
         <button class="btn btn-sm btn-outline" onclick="printChallanDoc('${id}')" title="Print">🖨️</button>
         ${locked?'':`<button class="btn btn-sm btn-outline" onclick="openEditDoc('challan','${id}')" title="Edit">✏️</button>
-        <button class="btn btn-sm btn-outline" style="color:var(--green-mid);" onclick="approveDoc('challan','${id}')" title="Approve — makes the challan final">✔ Approve</button>
+        ${canFinalize()?`<button class="btn btn-sm btn-outline" style="color:var(--green-mid);" onclick="approveDoc('challan','${id}')" title="Approve — makes the challan final">✔ Approve</button>`:''}
         <button class="btn btn-sm btn-outline" style="color:var(--danger);" onclick="deleteChallan('${id}')" title="Delete draft">✕</button>`}
       </td></tr>`;
   }).join('');
@@ -7193,7 +7195,7 @@ window.renderQuotations=function(){
       <td style="display:flex;gap:4px;flex-wrap:wrap;">
         <button class="btn btn-sm btn-outline" onclick="printQuotDoc('${id}')" title="Print">🖨️</button>
         ${locked?'':`<button class="btn btn-sm btn-outline" onclick="openEditDoc('quotation','${id}')" title="Edit">✏️</button>
-        <button class="btn btn-sm btn-outline" style="color:var(--green-mid);" onclick="approveDoc('quotation','${id}')" title="Approve — makes the quotation final">✔ Approve</button>`}
+        ${canFinalize()?`<button class="btn btn-sm btn-outline" style="color:var(--green-mid);" onclick="approveDoc('quotation','${id}')" title="Approve — makes the quotation final">✔ Approve</button>`:''}`}
         ${q.status==='Open'?`<button class="btn btn-sm btn-outline" style="color:var(--green-mid);font-size:0.72rem;" onclick="convertQuotToInvoice('${id}')" title="Convert to Invoice">→INV</button>`:''}
         ${locked?'':`<button class="btn btn-sm btn-outline" style="color:var(--danger);" onclick="deleteQuot('${id}')" title="Delete draft">✕</button>`}
       </td></tr>`;
